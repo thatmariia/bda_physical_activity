@@ -7,56 +7,17 @@ user_df <- readRDS(file.path(output_dir, "user_df.rds"))
 
 # 2. Feature Extraction
 
-Having all the data in one tidy table, we are now ready to extract features that can be used by classification algorithms.
+We continue working on signals from a single file, so we can develop iteratively without exhausting RAM.
 
-As before, we'll continue working on `user_df` — remember that this data frame contains the signals from a single file. You may wonder why focus on only one file. There are two important reasons for this:
-
-1. It lets us **develop and test the code step by step**. You can check that each idea works before scaling it up.
-
-2. In practice, we often face **memory limitations**. Your computer cannot load an unlimited amount of data at once. For example, the full dataset here has dozens of users, each with multiple experiments, and each file contains thousands of samples across three channels. Reading all of that into R in one go could exhaust your computer's memory (RAM). If that happens, your code will slow down drastically or even crash.
-
-   To avoid this, we design our workflow so that we process one file at a time: we extract features from it, store the smaller feature summary, and then move on to the next file. This way, we never need to keep all the raw signals in memory at once.
-
-Later, you'll wrap this single-file workflow into a function and then apply it to **all files in the dataset**.
+We design our workflow so that we process one file at a time:
+we extract features from it, store the smaller feature summary, and then move on to the next file.
 
 ## 2.1 Time domain features
 
-The raw time samples themselves are not useful features. To see why, consider the following plot that shows segments of typical walking cycles (chosen by inspecting the signals):
-
-```{r}
-user_df %>%
-  # change 7986 to 8586 to see shifted walk cycle
-  dplyr::filter(
-    activity == "WALKING", segment == 13,
-    7596 < sampleid & sampleid < 7986
-  ) |>
-  ggplot(aes(
-    x = sampleid %% 54, y = X1, group = sampleid %/% 54,
-    col = factor(sampleid %/% 54)
-  )) +
-  geom_line()
-```
-
-Here we divided the signal into windows of 54 samples, so that each window roughly covers one walking cycle. The cycles are plotted on top of each other:
-
-* `%/%` = integer division → assigns cycle IDs (0, 1, 2, …).
-* `%%` = remainder → resets the x-axis within each cycle.
-
-The pattern is clear. The problem is:
-
-1. we don't know in advance how many samples a typical pattern spans, and
-2. patterns can be shifted relative to our chosen window, so the cycles don't always line up.
-
-If we combine signals from multiple participants, the misalignment problem becomes worse — we can't simply line up samples and call them the same feature.
-
-**Conclusion:** samples themselves are not good features.
-
-Instead, we compute features that don't depend on time shifts. A simple way is to ignore the order of the samples and treat them as a collection of numbers. Then we describe that collection with **statistical summaries**.
 
 ### Looking at histograms
 
-Histograms give a detailed picture of the distribution of the signal values:
-
+Histograms give a detailed picture of the distribution of the signal values.
 For instance, have a look at the histograms of the signal samples per activity:
 
 ```{r}
@@ -68,101 +29,49 @@ user_df |>
   facet_wrap(~activity, scales = "free_y")
 ```
 
-**The histograms for different activities look quite distinct.** This means that statistical summaries (mean, standard deviation, skewness, etc.) could help us tell the activities apart.
-
-Histograms are very detailed, perhaps too detailed. So instead we can summarize them with just a few characteristic numbers such as
+**The histograms for different activities look quite distinct.** This means that statistical summaries
+(mean, standard deviation, skewness, etc.) could help us tell the activities apart.
 
 * the center (mean),
 * the spread (standard deviation, interquartile range, min-max range),
 * the shape (skewness, kurtosis),
 * ...and so on.
 
-These summary statistics often make excellent features.
-
 ### Epochs
 
-There's one more step. In real data, we don't know when an activity starts or ends. In the test dataset you will need to predict activities for consecutive **time windows** called *epochs* of 128 samples (= 2.56 seconds at 50 Hz).
 
-To split data into epochs, we use integer division `%/%`. For example:
+We also need an activity label for each epoch. Most epochs will have 128 samples with one and the same activity label.
+However, because the partitioning of the signals into epochs of 128 samples is done without regard for the activity label,
+some epochs will have more than one activity label, for example for a change in activity during that epoch.
+We will deal with that by labeling such epochs with the label that is associated with the largest number of samples of that epoch.
 
-```{r}
-0:14 %/% 3
-```
-
-Groups the numbers 0–14 into bins of size 3.
-
-We can use the same trick on the `sampleid` to group signals into epochs of size 128, then compute summary statistics per epoch:
-
-```{r}
-user_df |>
-  mutate(epoch = sampleid %/% 128) |> # add epoch ID (each epoch spans 2.56 sec of signal)
-  group_by(epoch) |>
-  summarise(
-    mean_X1 = mean(X1),
-    mean_X2 = mean(X2),
-    mean_X3 = mean(X3)
-  ) |>
-  head()
-```
-
-What we did here was the following
-
-1. We divided up the samples into 'epochs' of fixed length (128 samples ≈ 2.56 sec).
-2. We then grouped the resulting data frame by 'epoch' id.
-3. And then we computed the summary statistic feature (the _mean_ in this case) of the samples in each epoch, for each of the 3 signals.
-
-This produces one row per epoch, with summary features (in this case the _mean_ of each of the signals).
-
-This is a general pattern that you'll use to for computing features: Treat the numerical representation of the information in data files as a bunch of numbers and compute statistics.
-
-A catch is that we also need an activity label for each epoch. Most epochs will have 128 samples with one and the same activity label. However, because the partitioning of the signals into epochs of 128 samples is done without regard for the activity label, some epochs will have more than one activity label, for example for a change in activity during that epoch. We will deal with that by labeling such epochs with the label that is associated with the largest number of samples of that epoch.
+Additionally, we will compute a confidence score for the activity label of each epoch,
+which is the proportion of samples in that epoch that have the most common activity label.
 
 ### Writing your own feature functions
 
-Some features are easy (mean, sd). Others you'll want to define yourself. The example functions `most_common_value()` and `lagged_cor()` are defined in `R/`. ***Defining seperate feature extraction functions also makes it easy to divided the feature coding between all team members!***
-
-Now let's use these functions to extract the features from the raw signals in `user_df`:
 
 ```{r}
 # Compute features per epoch:
-
-usertimedom <- user_df |>
-  # add an epoch ID variable (one epoch = 2.56 sec)
-  mutate(epoch = sampleid %/% 128) |>
-  # extract statistical features from each epoch
-  group_by(epoch) |>
-  summarise(
-    # Activity label for the epoch = most common value (mode)
-    activity = most_common_value(c("-", activity)),
-
-    # Keep starting sample ID of the epoch
-    sampleid = sampleid[1],
-
-    # Signal features
-    mean_X1 = mean(X1),
-    mean_X2 = mean(X2),
-    sd_X1 = sd(X1),
-    q25_X1 = quantile(X1, .25),
-    skew_X1 = e1071::skewness(X1),
-    AR1_X1_lag1 = lagged_cor(X1, lag = 1),
-    AR1_X1_lag2 = lagged_cor(X1, lag = 2),
-    AR_X1X2_lag1 = lagged_cor(X1, X2, lag = 1),
-
-    # ...
-    # ... add your own features here ...
-    # ... (to get inspired, look at the histograms above)
-    # ...
-
-    # Keep track of signal lengths
-    n_samples = n()
-  )
-
+usertimedom <- get_time_domain_features(user_df)
 head(usertimedom)
+
+# Plot the confidence levels for each activity label
+usertimedom |>
+  filter(aggr_activity != "-") |>
+  ggplot(aes(x = aggr_activity, y = activity_confidence)) +
+  geom_boxplot() +
+  facet_wrap(~aggr_activity, scales = "free_x") +
+  theme(axis.text.x = element_blank()) +
+  labs(x = "Activity label", y = "Confidence of activity label")
 ```
 
 This is a tidy data frame that can be used in the classification algorithms discussed in chapters 3 and 4 of ISLR.
 
-***Note**: You may not be familiar with the `AR1.1`, `AR1.2` and `AR12.1` computed above. These are called _autocorrelations_ (at lags 1 and 2) and _lagged cross-correlations_. They are discussed in [Feature Extraction from Signals](https://paper.dropbox.com/doc/Feature-extraction-from-Signals--A62tmtXDMS34X292NP0fKphQAQ-qCp5uvj47gmyuw5nmB8lL). They are interesting because slowly changing signals have high autocorellations, while fast changing signals have low or even negative autocorrelations.*
+***Note**: You may not be familiar with the `AR1.1`, `AR1.2` and `AR12.1` computed above.
+These are called _autocorrelations_ (at lags 1 and 2) and _lagged cross-correlations_.
+They are discussed in [Feature Extraction from Signals](https://paper.dropbox.com/doc/Feature-extraction-from-Signals--A62tmtXDMS34X292NP0fKphQAQ-qCp5uvj47gmyuw5nmB8lL).
+They are interesting because slowly changing signals have high autocorellations, while fast changing signals have low or even negative autocorrelations.*
 
 ## 2.2 Frequency domain features
 
