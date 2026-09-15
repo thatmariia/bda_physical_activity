@@ -35,9 +35,3 @@ load_signal <- function(file_path) {
   signal_data <- read_delim(file_path, delim = " ", col_names = FALSE, col_types = "ddd")
   return(signal_data)
 }
-
-most_common_value <- function(x) {
-  counts <- table(x, useNA = "no")
-  most_frequent <- which.max(counts)
-  return(names(most_frequent))
-}
