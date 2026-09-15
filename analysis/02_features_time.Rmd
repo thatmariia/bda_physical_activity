@@ -1,7 +1,8 @@
 ```{r, include = FALSE}
 source(here::here("setup.R"))
 for (file in list.files(here::here("R"), full.names = TRUE)) source(file)
-user_df <- readRDS(file.path(output_dir, "user_df.rds"))
+acc_df <- readRDS(file.path(output_dir, "acc_df.rds"))
+gyro_df <- readRDS(file.path(output_dir, "gyro_df.rds"))
 ```
 
 # Time domain features
@@ -12,12 +13,23 @@ Histograms give a detailed picture of the distribution of the signal values.
 For instance, have a look at the histograms of the signal samples per activity:
 
 ```{r}
-user_df |>
-  ggplot(aes(X1)) +
-  geom_histogram(bins = 40, fill = 1, alpha = 0.5) +
-  geom_histogram(aes(X2), bins = 40, fill = 2, alpha = 0.5) +
-  geom_histogram(aes(X3), bins = 40, fill = 4, alpha = 0.5) +
-  facet_wrap(~activity, scales = "free_y")
+plot_signal_df_hist <- function(x) {
+  x |>
+    filter(!is.na(activity)) %>% # keep only labeled samples
+    ggplot(aes(X1)) +
+    geom_histogram(bins = 40, fill = 1, alpha = 0.5) +
+    geom_histogram(aes(X2), bins = 40, fill = 2, alpha = 0.5) +
+    geom_histogram(aes(X3), bins = 40, fill = 4, alpha = 0.5) +
+    facet_wrap(~activity, scales = "free_y")
+}
+
+# Plot a histogram of the accelerometer signal, separated by activity
+plot_signal_df_hist(acc_df)
+```
+
+```{r}
+# Plot a histogram of the gyroscope signal, separated by activity
+plot_signal_df_hist(gyro_df)
 ```
 
 **The histograms for different activities look quite distinct.** This means that statistical summaries
@@ -31,12 +43,16 @@ user_df |>
 ## Feature extraction
 
 ```{r}
-# Compute features per epoch:
-usertimedom <- get_time_domain_features(user_df)
-head(usertimedom)
+# Compute features per epoch for acc
+time_features_acc <- get_time_domain_features_acc(acc_df)
+head(time_features_acc)
+
+# Compute features per epoch for gyro
+time_features_gyro <- get_time_domain_features_gyro(gyro_df)
+head(time_features_gyro)
 
 # Plot the confidence levels for each activity label
-usertimedom |>
+time_features_gyro |>
   filter(aggr_activity != "-") |>
   ggplot(aes(x = aggr_activity, y = activity_confidence)) +
   geom_boxplot() +
@@ -53,5 +69,6 @@ They are discussed in [Feature Extraction from Signals](https://paper.dropbox.co
 They are interesting because slowly changing signals have high autocorellations, while fast changing signals have low or even negative autocorrelations.*
 
 ```{r, include = FALSE}
-saveRDS(usertimedom, file.path(output_dir, "usertimedom.rds"))
+saveRDS(time_features_acc, file.path(output_dir, "time_features_acc.rds"))
+saveRDS(time_features_gyro, file.path(output_dir, "time_features_gyro.rds"))
 ```

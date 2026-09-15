@@ -11,11 +11,33 @@ mean_frequency <- function(freq, spec) {
   return(mean_freq)
 }
 
-#' Extract frequency domain features from a spectrum data frame,
+#' Extract frequency domain features from a spectrum data frame for accelerometer data,
 #' which is assumed to be already segmented into epochs
 #' @param spectrum_df A data frame containing the spectrum data with columns: epoch, freq, spec1, spec2, ...
 #' @return A data frame containing the extracted frequency domain features for each epoch
-get_frequency_domain_features <- function(spectrum_df) {
+get_frequency_domain_features_acc <- function(spectrum_df) {
+  userfreqdom <- spectrum_df %>%
+    group_by(epoch) %>%
+    summarise(
+      # Dominant frequency of signal 1
+      domfreq1 = freq[which.max(spec1)],
+
+      # Mean frequency of signal 2
+      meanfreq2 = mean_frequency(freq, spec2),
+
+      # Example of other possible features
+      # (you can define your own functions like before)
+      # spectral_entropy = ...
+      # bandpower_low   = ...
+      # bandpower_high  = ...
+  )
+}
+
+#' Extract frequency domain features from a spectrum data frame for gyroscope data,
+#' which is assumed to be already segmented into epochs
+#' @param spectrum_df A data frame containing the spectrum data with columns: epoch, freq, spec1, spec2, ...
+#' @return A data frame containing the extracted frequency domain features for each epoch
+get_frequency_domain_features_gyro <- function(spectrum_df) {
   userfreqdom <- spectrum_df %>%
     group_by(epoch) %>%
     summarise(

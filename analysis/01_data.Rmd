@@ -3,30 +3,7 @@ source(here::here("setup.R"))
 for (file in list.files(here::here("R"), full.names = TRUE)) source(file)
 ```
 
-```{r}
-# List the files
-list.files(data_dir)
-
-# show the content of the labels file
-# file.show(file.path(data_dir, "activity_labels.txt"))
-cat(read_lines(file.path(data_dir, "activity_labels.txt")), sep = "\n")
-```
-
-The data files themselves are stored in the 'RawData' folder. This folder contains a folder 'Train' and a folder 'Test'. Let's look at the list of filenames in the 'Train' folder:
-
-```{r}
-# Train and Test folder are located in the RawData folder
-list.files(file.path(data_dir, "RawData"))
-
-# The Train folder contains 85 files:
-length(list.files(train_dir))
-
-# A sample of the file names in the Train folder; notice the filename pattern
-set.seed(1)
-sample(list.files(train_dir), 6)
-```
-
-# 1. Reading the data
+# Reading the data
 
 * The format of signal files is `<sensor>_exp<XX>_user<YY>.txt`, where `<sensor>` is either `acc` (accelerometer) or `gyro` (gyroscope), `<XX>` is experiment ID, and `<YY>` is user ID.
 * Each signal file contains three columns, one for each sensor channel, corresponding to the *X*, *Y*, and *Z* directions. The file consists of a sequence of samples.
@@ -37,7 +14,7 @@ sample(list.files(train_dir), 6)
 **Goal:** To analyze the data, we need to merge the signals with their activity code and labels.
 In practice, this means reading the signals (each row = one time point) and assigning the correct label to each time point.
 
-## 1.1 Import Activity labels
+## Import Activity labels
 
 ```{r}
 # Import the activity labels file
@@ -69,51 +46,62 @@ head(sample_labels)
 tail(sample_labels)
 ```
 
-## 1.2 Import the signals
+## Import the signals
 
-To begin, we'll focus on a single file: the accelerometer signals for participant `user01` in trial `exp01`.
+To begin, we'll focus on 2 single files: the accelerometer and gyroscope signals for participant `user01` in trial `exp01`.
 
 ```{r}
 username <- 1
 expname  <- 1
-sensor   <- "acc"
-file_path_user01 <- get_file_path(train_dir, sensor, expname, username)
-acc_signal_user01 <- load_signal(file_path_user01)
+
+# Load the accelerometer signal for user01 in exp01
+file_path_acc <- get_file_path(train_dir, "acc", expname, username)
+acc_signal <- load_signal(file_path_acc)
+
+# Load the gyroscope signal for user01 in exp01
+file_path_gyro <- get_file_path(train_dir, "gyro", expname, username)
+gyro_signal <- load_signal(file_path_gyro)
 ```
 
-## 1.3 Merging Signals and Labels
+## Merging Signals and Labels
 
-We create a tibble that contains the `userid`, the `trial` number, and a `sampleid` for each row in `acc_signal_user01`.
+We create a tibble that contains the `userid`, the `trial` number, and a `sampleid` for each row in a signal df.
 Then we bind in the three signal columns (`X1`, `X2`, `X3`) and finally (left) join this table with `sample_labels`
 so that every sample has the correct activity label.
 
 ```{r}
 # Create a data frame with the signal and the corresponding activity labels
-user_df <- get_signal_df(
-  exp_id = expname,
-  user_id = username,
-  signal_data = acc_signal_user01,
-  sample_labels = sample_labels
-)
+acc_df <- get_signal_df(expname, username, acc_signal, sample_labels)
+gyro_df <- get_signal_df(expname, username, gyro_signal, sample_labels)
 
 # Check the result (first few rows are not interesting; the following are)
-cat("The user_df data frame has", nrow(user_df), "rows and", ncol(user_df), "columns.\n")
-print(user_df[1227:1239, ])
+cat("Accelerometer data frame for user", username, "in trial", expname, "\n")
+print(acc_df[1227:1239, ])
+cat("Gyroscope data frame for user", username, "in trial", expname, "\n")
+print(gyro_df[1227:1239, ])
 ```
 
 This table is exactly what we need: each sample in the three signal channels is now labeled with its corresponding activity.
 
-To check if the labeling is correct, we can visualize the result. The plot below shows the first signal channel (`X1`), with different colors indicating different activities:
+To check if the labeling is correct, we can visualize the result.
 
 ```{r}
 options(repr.plot.width = 15) # widen the plot for readability
 
-# Plot the first signal channel, colored by activity
-user_df %>%
-  # filter(sampleid < 512) %>%
-  filter(!is.na(activity)) %>% # keep only labeled samples
-  ggplot(aes(x = sampleid, y = X1, colour = factor(activity), group = segment)) +
-  geom_line()
+plot_signal_df <- function(x) {
+  x %>%
+    filter(!is.na(activity)) %>% # keep only labeled samples
+    ggplot(aes(x = sampleid, y = X1, colour = factor(activity), group = segment)) +
+    geom_line()
+}
+
+# Plot the first signal channel for acc, colored by activity
+plot_signal_df(acc_df)
+```
+
+```{r}
+# Plot the first signal channel for gyro, colored by activity
+plot_signal_df(gyro_df)
 ```
 
 ## Epochs
@@ -130,5 +118,6 @@ which is the proportion of samples in that epoch that have the most common activ
 
 ```{r, include = FALSE}
 saveRDS(sample_labels, file.path(output_dir, "sample_labels.rds"))
-saveRDS(user_df, file.path(output_dir, "user_df.rds"))
+saveRDS(acc_df, file.path(output_dir, "acc_df.rds"))
+saveRDS(gyro_df, file.path(output_dir, "gyro_df.rds"))
 ```
