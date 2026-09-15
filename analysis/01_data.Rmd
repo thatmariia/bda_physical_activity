@@ -126,6 +126,8 @@ We will deal with that by labeling such epochs with the label that is associated
 Additionally, we will compute a confidence score for the activity label of each epoch,
 which is the proportion of samples in that epoch that have the most common activity label.
 
+**Each epoch becomes one row in a tidy data frame, with features that summarise the signal in that epoch.**
+
 ```{r, include = FALSE}
 saveRDS(sample_labels, file.path(output_dir, "sample_labels.rds"))
 saveRDS(user_df, file.path(output_dir, "user_df.rds"))
