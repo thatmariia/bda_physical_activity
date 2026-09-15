@@ -49,6 +49,7 @@ compute_spectrum <- function(signal, gaussian_sigma = 3) {
 convert_signal_to_spectrum_df <- function(signal_df, n_samples_per_epoch = 128, sample_rate = 50) {
   spectrum_df <- signal_df |>
     mutate(epoch = sampleid %/% n_samples_per_epoch) |>
+    filter(n() == n_samples_per_epoch, .by = epoch) |>
     reframe(
       {
         sp <- spectrum(cbind(X1, X2, X3), span = 15, plot = FALSE)
