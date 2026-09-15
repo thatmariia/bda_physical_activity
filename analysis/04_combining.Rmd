@@ -1,0 +1,50 @@
+```{r, include = FALSE}
+source(here::here("setup.R"))
+for (file in list.files(here::here("R"), full.names = TRUE)) source(file)
+sample_labels <- readRDS(file.path(output_dir, "sample_labels.rds"))
+user_df <- readRDS(file.path(output_dir, "user_df.rds"))
+```
+
+# Putting it all together
+
+We've just processed only one file. We need to process all of them and combine the resulting data frames in one big data frame. The function `extractTimeDomainFeatures()` (defined in `R/`) does this for the accelerometer data files (the ones starting with `acc`). You will need to do the same for the gyroscope data (filenames starting with `gyro`).
+
+To obtain a list of all the files, use `dir()`:
+
+```{r}
+list.files(train_dir, pattern = "^acc")
+```
+
+This is not the most efficient way to organize a function (it combines several code chunks with very different functionality in one function; different types of functionality better go in separate functions), but it suffices for our purposes.
+
+Note that the function is merely a copy and paste of the code developed above (with minor modifications). To see how it does as promissed:
+
+```{r}
+filename <- file.path(train_dir, "acc_exp01_user01.txt")
+df <- extractTimeDomainFeatures(filename, sample_labels)
+print(df)
+```
+
+It looks like our function works as expected (check this!).
+
+Now, you could make a `for` loop to iterate through all the filenames listed by the `list.files()` command above, however, here's a slightly less cumbersome trick: Using `map_dfr()` that is part of the `tidyverse`. We demonstrate this with only 5 files; **you will have to remove that restriction**.
+
+```{r}
+# demonstrate this for only the first 5 files
+filenames <- dir(train_dir, "^acc", full.names = TRUE)[1:10]
+
+# map_dfr runs `extractTimeDomainFeatures` on all elements in
+# filenames and binds results row wise
+myData <- map_dfr(filenames, extractTimeDomainFeatures, sample_labels)
+
+# Check the result (are there any NAs or unexpected values?)
+summary(myData)
+```
+
+We really should check for NA's
+
+Now the data are turned into a tidy format with features that can be used in any of the algorithms.
+
+```{r, include = FALSE}
+saveRDS(myData, file.path(output_dir, "myData.rds"))
+```

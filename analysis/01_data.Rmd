@@ -110,10 +110,21 @@ options(repr.plot.width = 15) # widen the plot for readability
 
 # Plot the first signal channel, colored by activity
 user_df %>%
+  # filter(sampleid < 512) %>%
   filter(!is.na(activity)) %>% # keep only labeled samples
   ggplot(aes(x = sampleid, y = X1, colour = factor(activity), group = segment)) +
   geom_line()
 ```
+
+## Epochs
+
+We also need an activity label for each epoch. Most epochs will have 128 samples with one and the same activity label.
+However, because the partitioning of the signals into epochs of 128 samples is done without regard for the activity label,
+some epochs will have more than one activity label, for example for a change in activity during that epoch.
+We will deal with that by labeling such epochs with the label that is associated with the largest number of samples of that epoch.
+
+Additionally, we will compute a confidence score for the activity label of each epoch,
+which is the proportion of samples in that epoch that have the most common activity label.
 
 ```{r, include = FALSE}
 saveRDS(sample_labels, file.path(output_dir, "sample_labels.rds"))
