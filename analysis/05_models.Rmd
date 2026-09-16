@@ -1,7 +1,7 @@
 ```{r, include = FALSE}
 source(here::here("setup.R"))
 for (file in list.files(here::here("R"), full.names = TRUE)) source(file)
-myData <- readRDS(file.path(output_dir, "myData.rds"))
+df <- readRDS(file.path(output_dir, "df.rds"))
 ```
 
 # 4. Model fitting

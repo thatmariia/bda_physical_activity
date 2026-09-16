@@ -30,8 +30,30 @@ head(df)
 summary(df)
 ```
 
+## Cleaning
 
 We really should check for NA's
+
+```{r}
+sum(is.na(df))
+```
+
+Removing columns unneccessary for fitting.
+
+```{r}
+df <- df |> select(-epoch, -sampleid, -n_samples)
+```
+
+## Visualizing features
+
+```{r}
+df |>
+    filter(activity_confidence > 0) |>
+    pivot_longer(cols = -c(activity_confidence, aggr_activity), names_to = "feature", values_to = "value") |>
+    ggplot(aes(value, color = aggr_activity)) +
+    geom_density() +
+    facet_wrap(~feature, scales = "free")
+```
 
 Now the data are turned into a tidy format with features that can be used in any of the algorithms.
 
